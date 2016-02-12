@@ -8,7 +8,7 @@ ifndef SMALL
 SMALL=1
 endif
 
-include $(CONTIKI)/platform/sky/Makefile.common
+include $(CONTIKI)/platform/Makefile.common
 
 MODULES += core/net/mac \
            core/net \
