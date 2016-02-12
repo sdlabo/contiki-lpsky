@@ -7,8 +7,8 @@ endif
 ifeq ($(TARGET),)
   -include Makefile.target
   ifeq ($(TARGET),)
-    ${info TARGET not defined, using target 'native'}
-    TARGET=native
+    ${info TARGET not defined, using target 'sky'}
+    TARGET=sky
   else
     ${info using saved target '$(TARGET)'}
   endif
