@@ -35,7 +35,6 @@
 #include "dev/ds2411/ds2411.h"
 #include "dev/leds.h"
 #include "dev/serial-line.h"
-#include "dev/slip.h"
 #include "dev/uart1.h"
 #include "dev/watchdog.h"
 #include "dev/xmem.h"
@@ -43,9 +42,6 @@
 #include "net/netstack.h"
 #include "net/mac/frame802154.h"
 
-#if NETSTACK_CONF_WITH_IPV6
-#include "net/ipv6/uip-ds6.h"
-#endif /* NETSTACK_CONF_WITH_IPV6 */
 
 #include "net/rime/rime.h"
 
@@ -54,18 +50,6 @@
 #include "cfs/cfs-coffee.h"
 #include "sys/autostart.h"
 
-#if UIP_CONF_ROUTER
-
-#ifndef UIP_ROUTER_MODULE
-#ifdef UIP_CONF_ROUTER_MODULE
-#define UIP_ROUTER_MODULE UIP_CONF_ROUTER_MODULE
-#else /* UIP_CONF_ROUTER_MODULE */
-#define UIP_ROUTER_MODULE rimeroute
-#endif /* UIP_CONF_ROUTER_MODULE */
-#endif /* UIP_ROUTER_MODULE */
-
-extern const struct uip_router UIP_ROUTER_MODULE;
-#endif /* UIP_CONF_ROUTER */
 
 #if DCOSYNCH_CONF_ENABLED
 static struct timer mgt_timer;
@@ -76,22 +60,8 @@ extern int msp430_dco_required;
 #define NETSTACK_CONF_WITH_IPV4 0
 #endif
 
-#if NETSTACK_CONF_WITH_IPV4
-#include "net/ip/uip.h"
-#include "net/ipv4/uip-fw.h"
-#include "net/ipv4/uip-fw-drv.h"
-#include "net/ipv4/uip-over-mesh.h"
-static struct uip_fw_netif slipif =
-  {UIP_FW_NETIF(192,168,1,2, 255,255,255,255, slip_send)};
-static struct uip_fw_netif meshif =
-  {UIP_FW_NETIF(172,16,0,0, 255,255,0,0, uip_over_mesh_send)};
-
-#endif /* NETSTACK_CONF_WITH_IPV4 */
 
 #define UIP_OVER_MESH_CHANNEL 8
-#if NETSTACK_CONF_WITH_IPV4
-static uint8_t is_gateway;
-#endif /* NETSTACK_CONF_WITH_IPV4 */
 
 #ifdef EXPERIMENT_SETUP
 #include "experiment-setup.h"
@@ -106,31 +76,8 @@ static uint8_t is_gateway;
 
 void init_platform(void);
 
-/*---------------------------------------------------------------------------*/
-#if 0
-int
-force_float_inclusion()
-{
-  extern int __fixsfsi;
-  extern int __floatsisf;
-  extern int __mulsf3;
-  extern int __subsf3;
-
-  return __fixsfsi + __floatsisf + __mulsf3 + __subsf3;
-}
-#endif
-/*---------------------------------------------------------------------------*/
 void uip_log(char *msg) { puts(msg); }
 
-/*---------------------------------------------------------------------------*/
-#if 0
-void
-force_inclusion(int d1, int d2)
-{
-  snprintf(NULL, 0, "%d", d1 % d2);
-}
-#endif
-/*---------------------------------------------------------------------------*/
 static void
 set_rime_addr(void)
 {
@@ -138,9 +85,7 @@ set_rime_addr(void)
   int i;
 
   memset(&addr, 0, sizeof(linkaddr_t));
-#if NETSTACK_CONF_WITH_IPV6
-  memcpy(addr.u8, ds2411_id, sizeof(addr.u8));
-#else
+
   if(node_id == 0) {
     for(i = 0; i < sizeof(linkaddr_t); ++i) {
       addr.u8[i] = ds2411_id[7 - i];
@@ -149,7 +94,7 @@ set_rime_addr(void)
     addr.u8[0] = node_id & 0xff;
     addr.u8[1] = node_id >> 8;
   }
-#endif
+
   linkaddr_set_node_addr(&addr);
   PRINTF("Rime started with address ");
   for(i = 0; i < sizeof(addr.u8) - 1; i++) {
@@ -172,23 +117,6 @@ print_processes(struct process * const processes[])
 }
 #endif /* !PROCESS_CONF_NO_PROCESS_NAMES */
 /*--------------------------------------------------------------------------*/
-#if NETSTACK_CONF_WITH_IPV4
-static void
-set_gateway(void)
-{
-  if(!is_gateway) {
-    leds_on(LEDS_RED);
-    PRINTF("%d.%d: making myself the IP network gateway.\n\n",
-	   linkaddr_node_addr.u8[0], linkaddr_node_addr.u8[1]);
-    PRINTF("IPv4 address of the gateway: %d.%d.%d.%d\n\n",
-	   uip_ipaddr_to_quad(&uip_hostaddr));
-    uip_over_mesh_set_gateway(&linkaddr_node_addr);
-    uip_over_mesh_make_announced_gateway();
-    is_gateway = 1;
-  }
-}
-#endif /* NETSTACK_CONF_WITH_IPV4 */
-/*---------------------------------------------------------------------------*/
 static void
 start_autostart_processes()
 {
@@ -198,60 +126,14 @@ start_autostart_processes()
   autostart_start(autostart_processes);
 }
 /*---------------------------------------------------------------------------*/
-#if NETSTACK_CONF_WITH_IPV6
-static void
-start_uip6()
-{
-  NETSTACK_NETWORK.init();
-  
-  process_start(&tcpip_process, NULL);
-
-#if DEBUG
-  PRINTF("Tentative link-local IPv6 address ");
-  {
-    uip_ds6_addr_t *lladdr;
-    int i;
-    lladdr = uip_ds6_get_link_local(-1);
-    for(i = 0; i < 7; ++i) {
-      PRINTF("%02x%02x:", lladdr->ipaddr.u8[i * 2],
-             lladdr->ipaddr.u8[i * 2 + 1]);
-    }
-    PRINTF("%02x%02x\n", lladdr->ipaddr.u8[14], lladdr->ipaddr.u8[15]);
-  }
-#endif /* DEBUG */
-
-  if(!UIP_CONF_IPV6_RPL) {
-    uip_ipaddr_t ipaddr;
-    int i;
-    uip_ip6addr(&ipaddr, 0xaaaa, 0, 0, 0, 0, 0, 0, 0);
-    uip_ds6_set_addr_iid(&ipaddr, &uip_lladdr);
-    uip_ds6_addr_add(&ipaddr, 0, ADDR_TENTATIVE);
-    PRINTF("Tentative global IPv6 address ");
-    for(i = 0; i < 7; ++i) {
-      PRINTF("%02x%02x:",
-             ipaddr.u8[i * 2], ipaddr.u8[i * 2 + 1]);
-    }
-    PRINTF("%02x%02x\n",
-           ipaddr.u8[7 * 2], ipaddr.u8[7 * 2 + 1]);
-  }
-}
-#endif /* NETSTACK_CONF_WITH_IPV6 */
-/*---------------------------------------------------------------------------*/
 static void
 start_network_layer()
 {
-#if NETSTACK_CONF_WITH_IPV6
-  start_uip6();
-#endif /* NETSTACK_CONF_WITH_IPV6 */
   start_autostart_processes();
   /* To support link layer security in combination with NETSTACK_CONF_WITH_IPV4 and
    * TIMESYNCH_CONF_ENABLED further things may need to be moved here */
 }
 /*---------------------------------------------------------------------------*/
-#if WITH_TINYOS_AUTO_IDS
-uint16_t TOS_NODE_ID = 0x1234; /* non-zero */
-uint16_t TOS_LOCAL_ADDRESS = 0x1234; /* non-zero */
-#endif /* WITH_TINYOS_AUTO_IDS */
 int
 main(int argc, char **argv)
 {
@@ -325,7 +207,6 @@ main(int argc, char **argv)
 
   set_rime_addr(); //0.016 mA
 
-
   cc2420_init(); //0.4375 mA -> 0.016 mA
 
 
@@ -355,8 +236,6 @@ main(int argc, char **argv)
   NETSTACK_MAC.init();
   NETSTACK_NETWORK.init(); //0.016 mA
 
-
-
   PRINTF("%s %s %s, channel check rate %lu Hz, radio channel %u\n",
          NETSTACK_LLSEC.name, NETSTACK_MAC.name, NETSTACK_RDC.name,
          CLOCK_SECOND / (NETSTACK_RDC.channel_check_interval() == 0? 1:
@@ -366,7 +245,6 @@ main(int argc, char **argv)
 
   uart1_set_input(serial_line_input_byte);
   serial_line_init(); //0.016 mA
-
 
   leds_off(LEDS_GREEN);
 
