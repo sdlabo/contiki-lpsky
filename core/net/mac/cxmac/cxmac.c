@@ -47,7 +47,6 @@
 #include "net/mac/cxmac/cxmac.h"
 #include "net/rime/rime.h"
 #include "net/rime/timesynch.h"
-#include "sys/compower.h"
 #include "sys/pt.h"
 #include "sys/rtimer.h"
 
@@ -191,10 +190,6 @@ static int announcement_radio_txpower;
    for announcements from neighbors. */
 static uint8_t is_listening;
 
-#if CXMAC_CONF_COMPOWER
-static struct compower_activity current_packet;
-#endif /* CXMAC_CONF_COMPOWER */
-
 #if WITH_ENCOUNTER_OPTIMIZATION
 
 #include "lib/list.h"
@@ -245,9 +240,6 @@ powercycle_turn_radio_off(void)
      waiting_for_packet == 0) {
     off();
   }
-#if CXMAC_CONF_COMPOWER
-  compower_accumulate(&compower_idle_activity);
-#endif /* CXMAC_CONF_COMPOWER */
 }
 static void
 powercycle_turn_radio_on(void)
@@ -645,21 +637,6 @@ send_packet(void)
   PRINTF("cxmac: send (strobes=%u,len=%u,%s), done\n", strobes,
 	 packetbuf_totlen(), got_strobe_ack ? "ack" : "no ack");
 
-#if CXMAC_CONF_COMPOWER
-  /* Accumulate the power consumption for the packet transmission. */
-  compower_accumulate(&current_packet);
-
-  /* Convert the accumulated power consumption for the transmitted
-     packet to packet attributes so that the higher levels can keep
-     track of the amount of energy spent on transmitting the
-     packet. */
-  compower_attrconv(&current_packet);
-
-  /* Clear the accumulated power consumption so that it is ready for
-     the next packet. */
-  compower_clear(&current_packet);
-#endif /* CXMAC_CONF_COMPOWER */
-
   we_are_sending = 0;
 
   LEDS_OFF(LEDS_BLUE);
@@ -722,20 +699,6 @@ input_packet(void)
 	/* We have received the final packet, so we can go back to being
 	   asleep. */
 	off();
-
-#if CXMAC_CONF_COMPOWER
-	/* Accumulate the power consumption for the packet reception. */
-	compower_accumulate(&current_packet);
-	/* Convert the accumulated power consumption for the received
-	   packet to packet attributes so that the higher levels can
-	   keep track of the amount of energy spent on receiving the
-	   packet. */
-	compower_attrconv(&current_packet);
-
-	/* Clear the accumulated power consumption so that it is ready
-	   for the next packet. */
-	compower_clear(&current_packet);
-#endif /* CXMAC_CONF_COMPOWER */
 
 	waiting_for_packet = 0;
 

@@ -48,7 +48,6 @@
 #include "net/mac/contikimac/contikimac.h"
 #include "net/netstack.h"
 #include "net/rime/rime.h"
-#include "sys/compower.h"
 #include "sys/pt.h"
 #include "sys/rtimer.h"
 
@@ -217,10 +216,6 @@ static volatile unsigned char radio_is_on = 0;
 #define PRINTDEBUG(...)
 #endif
 
-#if CONTIKIMAC_CONF_COMPOWER
-static struct compower_activity current_packet;
-#endif /* CONTIKIMAC_CONF_COMPOWER */
-
 #if WITH_PHASE_OPTIMIZATION
 
 #include "net/mac/phase.h"
@@ -297,17 +292,8 @@ schedule_powercycle_fixed(struct rtimer *t, rtimer_clock_t fixed_time)
 static void
 powercycle_turn_radio_off(void)
 {
-#if CONTIKIMAC_CONF_COMPOWER
-  uint8_t was_on = radio_is_on;
-#endif /* CONTIKIMAC_CONF_COMPOWER */
-  
   if(we_are_sending == 0 && we_are_receiving_burst == 0) {
     off();
-#if CONTIKIMAC_CONF_COMPOWER
-    if(was_on && !radio_is_on) {
-      compower_accumulate(&compower_idle_activity);
-    }
-#endif /* CONTIKIMAC_CONF_COMPOWER */
   }
 }
 /*---------------------------------------------------------------------------*/
@@ -712,21 +698,6 @@ send_packet(mac_callback_t mac_callback, void *mac_callback_ptr,
          got_strobe_ack ? "ack" : "no ack",
          collisions ? "collision" : "no collision");
 
-#if CONTIKIMAC_CONF_COMPOWER
-  /* Accumulate the power consumption for the packet transmission. */
-  compower_accumulate(&current_packet);
-
-  /* Convert the accumulated power consumption for the transmitted
-     packet to packet attributes so that the higher levels can keep
-     track of the amount of energy spent on transmitting the
-     packet. */
-  compower_attrconv(&current_packet);
-
-  /* Clear the accumulated power consumption so that it is ready for
-     the next packet. */
-  compower_clear(&current_packet);
-#endif /* CONTIKIMAC_CONF_COMPOWER */
-
   contikimac_is_on = contikimac_was_on;
   we_are_sending = 0;
 
@@ -891,20 +862,6 @@ input_packet(void)
       }
       mac_sequence_register_seqno();
 #endif /* RDC_WITH_DUPLICATE_DETECTION */
-
-#if CONTIKIMAC_CONF_COMPOWER
-      /* Accumulate the power consumption for the packet reception. */
-      compower_accumulate(&current_packet);
-      /* Convert the accumulated power consumption for the received
-         packet to packet attributes so that the higher levels can
-         keep track of the amount of energy spent on receiving the
-         packet. */
-      compower_attrconv(&current_packet);
-
-      /* Clear the accumulated power consumption so that it is ready
-         for the next packet. */
-      compower_clear(&current_packet);
-#endif /* CONTIKIMAC_CONF_COMPOWER */
 
       PRINTDEBUG("contikimac: data (%u)\n", packetbuf_datalen());
       NETSTACK_MAC.input();

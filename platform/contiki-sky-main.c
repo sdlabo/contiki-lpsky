@@ -56,16 +56,7 @@ static struct timer mgt_timer;
 #endif
 extern int msp430_dco_required;
 
-#ifndef NETSTACK_CONF_WITH_IPV4
-#define NETSTACK_CONF_WITH_IPV4 0
-#endif
-
-
 #define UIP_OVER_MESH_CHANNEL 8
-
-#ifdef EXPERIMENT_SETUP
-#include "experiment-setup.h"
-#endif
 
 #define DEBUG 1
 #if DEBUG
@@ -78,19 +69,18 @@ void init_platform(void);
 
 void uip_log(char *msg) { puts(msg); }
 
-static void
-set_rime_addr(void)
+static void set_rime_addr(void)
 {
   linkaddr_t addr;
   int i;
 
   memset(&addr, 0, sizeof(linkaddr_t));
 
-  if(node_id == 0) {
+  if(node_id == 0){
     for(i = 0; i < sizeof(linkaddr_t); ++i) {
       addr.u8[i] = ds2411_id[7 - i];
     }
-  } else {
+  }else{
     addr.u8[0] = node_id & 0xff;
     addr.u8[1] = node_id >> 8;
   }
@@ -100,12 +90,12 @@ set_rime_addr(void)
   for(i = 0; i < sizeof(addr.u8) - 1; i++) {
     PRINTF("%d.", addr.u8[i]);
   }
+
   PRINTF("%d\n", addr.u8[i]);
 }
 /*---------------------------------------------------------------------------*/
 #if !PROCESS_CONF_NO_PROCESS_NAMES
-static void
-print_processes(struct process * const processes[])
+static void print_processes(struct process * const processes[])
 {
   /*  const struct process * const * p = processes;*/
   printf("Starting");
@@ -117,8 +107,7 @@ print_processes(struct process * const processes[])
 }
 #endif /* !PROCESS_CONF_NO_PROCESS_NAMES */
 /*--------------------------------------------------------------------------*/
-static void
-start_autostart_processes()
+static void start_autostart_processes()
 {
 #if !PROCESS_CONF_NO_PROCESS_NAMES
   print_processes(autostart_processes);
@@ -126,16 +115,14 @@ start_autostart_processes()
   autostart_start(autostart_processes);
 }
 /*---------------------------------------------------------------------------*/
-static void
-start_network_layer()
+static void start_network_layer()
 {
   start_autostart_processes();
   /* To support link layer security in combination with NETSTACK_CONF_WITH_IPV4 and
    * TIMESYNCH_CONF_ENABLED further things may need to be moved here */
 }
 /*---------------------------------------------------------------------------*/
-int
-main(int argc, char **argv)
+int main(int argc, char **argv)
 {
   /*
    * Initalize hardware.
@@ -150,8 +137,6 @@ main(int argc, char **argv)
 
   leds_on(LEDS_GREEN);
   ds2411_init(); // 0.034 mA -> 0.016 mA
-
-
 
   /* XXX hack: Fix it so that the 802.15.4 MAC address is compatible
      with an Ethernet MAC address - byte 0 (byte 2 in the DS ID)
@@ -169,14 +154,7 @@ main(int argc, char **argv)
    * Hardware initialization done!
    */
 
-  /* Initialize energest first (but after rtimer)
-   */
-  energest_init(); //0.016 mA
-  ENERGEST_ON(ENERGEST_TYPE_CPU);
-
-
   node_id = 1;
-
   node_id_restore(); //using xmem
 
 
@@ -273,15 +251,6 @@ main(int argc, char **argv)
     if(process_nevents() != 0 || uart1_active()) {
       splx(s);			/* Re-enable interrupts. */
     } else {
-      static unsigned long irq_energest = 0;
-
-      /* Re-enable interrupts and go to sleep atomically. */
-      ENERGEST_OFF(ENERGEST_TYPE_CPU);
-      ENERGEST_ON(ENERGEST_TYPE_LPM);
-      /* We only want to measure the processing done in IRQs when we
-	 are asleep, so we discard the processing time done when we
-	 were awake. */
-      energest_type_set(ENERGEST_TYPE_IRQ, irq_energest);
       watchdog_stop();
       /* check if the DCO needs to be on - if so - only LPM 1 */
       if (msp430_dco_required) {
@@ -299,11 +268,8 @@ main(int argc, char **argv)
       /* We get the current processing time for interrupts that was
 	 done during the LPM and store it for next time around.  */
       dint();
-      irq_energest = energest_type_time(ENERGEST_TYPE_IRQ);
       eint();
       watchdog_start();
-      ENERGEST_OFF(ENERGEST_TYPE_LPM);
-      ENERGEST_ON(ENERGEST_TYPE_CPU);
     }
   }
 

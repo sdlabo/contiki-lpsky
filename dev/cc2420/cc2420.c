@@ -450,7 +450,6 @@ on(void)
   CC2420_ENABLE_FIFOP_INT();
   strobe(CC2420_SRXON);
 
-  ENERGEST_ON(ENERGEST_TYPE_LISTEN);
   receive_on = 1;
 }
 /*---------------------------------------------------------------------------*/
@@ -463,7 +462,6 @@ off(void)
   /* Wait for transmission to end before turning radio off. */
   wait_for_transmission();
 
-  ENERGEST_OFF(ENERGEST_TYPE_LISTEN);
   strobe(CC2420_SRFOFF);
   CC2420_DISABLE_FIFOP_INT();
 
@@ -674,20 +672,12 @@ cc2420_transmit(unsigned short payload_len)
         RELEASE_LOCK();
         return RADIO_TX_COLLISION;
       }
-      if(receive_on) {
-	ENERGEST_OFF(ENERGEST_TYPE_LISTEN);
-      }
-      ENERGEST_ON(ENERGEST_TYPE_TRANSMIT);
       /* We wait until transmission has ended so that we get an
 	 accurate measurement of the transmission time.*/
       wait_for_transmission();
 
-#ifdef ENERGEST_CONF_LEVELDEVICE_LEVELS
-      ENERGEST_OFF_LEVEL(ENERGEST_TYPE_TRANSMIT,cc2420_get_txpower());
-#endif
-      ENERGEST_OFF(ENERGEST_TYPE_TRANSMIT);
       if(receive_on) {
-	ENERGEST_ON(ENERGEST_TYPE_LISTEN);
+
       } else {
 	/* We need to explicitly turn off the radio,
 	 * since STXON[CCA] -> TX_ACTIVE -> RX_ACTIVE */
