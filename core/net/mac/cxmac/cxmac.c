@@ -434,21 +434,9 @@ send_packet(void)
     is_broadcast = 1;
     PRINTDEBUG("cxmac: send broadcast\n");
   } else {
-#if NETSTACK_CONF_WITH_IPV6
-    PRINTDEBUG("cxmac: send unicast to %02x%02x:%02x%02x:%02x%02x:%02x%02x\n",
-           packetbuf_addr(PACKETBUF_ADDR_RECEIVER)->u8[0],
-           packetbuf_addr(PACKETBUF_ADDR_RECEIVER)->u8[1],
-           packetbuf_addr(PACKETBUF_ADDR_RECEIVER)->u8[2],
-           packetbuf_addr(PACKETBUF_ADDR_RECEIVER)->u8[3],
-           packetbuf_addr(PACKETBUF_ADDR_RECEIVER)->u8[4],
-           packetbuf_addr(PACKETBUF_ADDR_RECEIVER)->u8[5],
-           packetbuf_addr(PACKETBUF_ADDR_RECEIVER)->u8[6],
-           packetbuf_addr(PACKETBUF_ADDR_RECEIVER)->u8[7]);
-#else
     PRINTDEBUG("cxmac: send unicast to %u.%u\n",
            packetbuf_addr(PACKETBUF_ADDR_RECEIVER)->u8[0],
            packetbuf_addr(PACKETBUF_ADDR_RECEIVER)->u8[1]);
-#endif /* NETSTACK_CONF_WITH_IPV6 */
   }
   len = NETSTACK_FRAMER.create();
   strobe_len = len + sizeof(struct cxmac_hdr);
