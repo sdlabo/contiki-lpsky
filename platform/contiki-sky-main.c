@@ -137,10 +137,8 @@ void hardware_init()
   leds_on(LEDS_GREEN);
   ds2411_init(); // 0.034 mA -> 0.016 mA
 
-
   leds_on(LEDS_BLUE);
   xmem_init(); //0.022 mA -> 0.016 mA
-
 
   leds_off(LEDS_RED);
   rtimer_init(); //0.016 mA
@@ -150,7 +148,7 @@ void hardware_init()
    */
 }
 
-int address_init()
+void address_init()
 {
   /* XXX hack: Fix it so that the 802.15.4 MAC address is compatible
      with an Ethernet MAC address - byte 0 (byte 2 in the DS ID)
@@ -159,6 +157,45 @@ int address_init()
 
   node_id = 1;
   node_id_restore(); //using xmem
+}
+
+void scheduler()
+{
+  while(1) {
+    int r;
+    do{
+      /* Reset watchdog. */
+      watchdog_periodic();
+      r = process_run();
+    }while(r > 0);
+
+    /*
+     * Idle processing.
+     */
+    int s = splhigh();        /* Disable interrupts. */
+    /* uart1_active is for avoiding LPM3 when still sending or receiving */
+    if(process_nevents() != 0 || uart1_active()){
+      splx(s);            /* Re-enable interrupts. */
+    }else{
+      watchdog_stop();
+      /* check if the DCO needs to be on - if so - only LPM 1 */
+      if(msp430_dco_required){
+        // ここでエラーメッセージを吐くようにするという手もある
+        // uartがONになっている時だけここに来るはず
+        _BIS_SR(GIE | CPUOFF); /* LPM1 sleep for DMA to work!. */
+      } else {
+        /* LPM3 sleep. This statement will block until the CPU is
+           woken up by an interrupt that sets the wake up flag. */
+        _BIS_SR(GIE | SCG0 | SCG1 | CPUOFF); 
+        //0.03750 mA
+      }
+      /* We get the current processing time for interrupts that was
+         done during the LPM and store it for next time around.  */
+      dint();
+      eint();
+      watchdog_start();
+    }
+  }
 }
 
 int main(int argc, char **argv)
@@ -216,8 +253,10 @@ int main(int argc, char **argv)
                          NETSTACK_RDC.channel_check_interval()),
          CC2420_CONF_CHANNEL);
 
+#if DEBUG
   uart1_set_input(serial_line_input_byte);
   serial_line_init(); //0.016 mA
+#endif /* DEBUG */
 
   leds_off(LEDS_GREEN);
 
@@ -229,42 +268,7 @@ int main(int argc, char **argv)
    * This is the scheduler loop.
    */
 
-  /*  watchdog_stop();*/
-  while(1) {
-    int r;
-    do{
-      /* Reset watchdog. */
-      watchdog_periodic();
-      r = process_run();
-    }while(r > 0);
-
-    /*
-     * Idle processing.
-     */
-    int s = splhigh();        /* Disable interrupts. */
-    /* uart1_active is for avoiding LPM3 when still sending or receiving */
-    if(process_nevents() != 0 || uart1_active()){
-      splx(s);            /* Re-enable interrupts. */
-    }else{
-      watchdog_stop();
-      /* check if the DCO needs to be on - if so - only LPM 1 */
-      if(msp430_dco_required){
-        // ここでエラーメッセージを吐くようにするという手もある
-        // uartがONになっている時だけここに来るはず
-        _BIS_SR(GIE | CPUOFF); /* LPM1 sleep for DMA to work!. */
-      } else {
-        /* LPM3 sleep. This statement will block until the CPU is
-           woken up by an interrupt that sets the wake up flag. */
-        _BIS_SR(GIE | SCG0 | SCG1 | CPUOFF); 
-        //0.03750 mA
-      }
-      /* We get the current processing time for interrupts that was
-         done during the LPM and store it for next time around.  */
-      dint();
-      eint();
-      watchdog_start();
-    }
-  }
+  scheduler();
 
   return 0;
 }
