@@ -50,8 +50,6 @@
 
 extern int msp430_dco_required;
 
-#define UIP_OVER_MESH_CHANNEL 8
-
 #define DEBUG 1
 #if DEBUG
 #define PRINTF(...) printf(__VA_ARGS__)
@@ -94,9 +92,9 @@ static void set_rime_addr(void)
 static void print_processes(struct process * const processes[])
 {
   /*  const struct process * const * p = processes;*/
-  printf("Starting");
+  PRINTF("Starting");
   while(*processes != NULL) {
-    printf(" '%s'", (*processes)->name);
+    PRINTF(" '%s'", (*processes)->name);
     processes++;
   }
   putchar('\n');
@@ -154,13 +152,32 @@ void address_init()
      with an Ethernet MAC address - byte 0 (byte 2 in the DS ID)
      cannot be odd. */
   ds2411_id[2] &= 0xfe;
-
-  node_id = 1;
+//  node_id = 1;
   node_id_restore(); //using xmem
 }
 
-void scheduler()
+void set_rf_addr()
 {
+  uint8_t longaddr[8];
+  uint16_t shortaddr;
+
+  shortaddr = (linkaddr_node_addr.u8[0] << 8) +
+    linkaddr_node_addr.u8[1];
+  memset(longaddr, 0, sizeof(longaddr));
+  linkaddr_copy((linkaddr_t *)&longaddr, &linkaddr_node_addr);
+  PRINTF("MAC %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x ",
+         longaddr[0], longaddr[1], longaddr[2], longaddr[3],
+         longaddr[4], longaddr[5], longaddr[6], longaddr[7]);
+
+  cc2420_set_pan_addr(IEEE802154_PANID, shortaddr, longaddr); //0.016 mA
+}
+
+void loop_scheduler()
+{
+  /*
+   * This is the scheduler loop.
+   */
+
   while(1) {
     int r;
     do{
@@ -209,39 +226,14 @@ int main(int argc, char **argv)
    * Initialize Contiki and our processes.
    */
   process_init(); //0.016 mA
-
   process_start(&etimer_process, NULL);
-
   ctimer_init(); //0.040 mA -> 0.017
-
   init_platform(); //0.017 mA
-
   set_rime_addr(); //0.016 mA
-
   cc2420_init(); //0.4375 mA -> 0.016 mA
-
-
-  {
-    uint8_t longaddr[8];
-    uint16_t shortaddr;
-
-    shortaddr = (linkaddr_node_addr.u8[0] << 8) +
-      linkaddr_node_addr.u8[1];
-    memset(longaddr, 0, sizeof(longaddr));
-    linkaddr_copy((linkaddr_t *)&longaddr, &linkaddr_node_addr);
-    PRINTF("MAC %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x ",
-           longaddr[0], longaddr[1], longaddr[2], longaddr[3],
-           longaddr[4], longaddr[5], longaddr[6], longaddr[7]);
-
-    cc2420_set_pan_addr(IEEE802154_PANID, shortaddr, longaddr); //0.016 mA
-  }
+  set_rf_addr();
 
   PRINTF(CONTIKI_VERSION_STRING " started. ");
-  if(node_id > 0) {
-    PRINTF("Node id is set to %u.\n", node_id);
-  } else {
-    PRINTF("Node id is not set.\n");
-  }
 
   NETSTACK_RDC.init();
   NETSTACK_MAC.init();
@@ -264,11 +256,7 @@ int main(int argc, char **argv)
 
   NETSTACK_LLSEC.bootstrap(start_network_layer);
 
-  /*
-   * This is the scheduler loop.
-   */
-
-  scheduler();
+  loop_scheduler();
 
   return 0;
 }
