@@ -41,8 +41,6 @@
 #include "lib/random.h"
 #include "net/netstack.h"
 #include "net/mac/frame802154.h"
-
-
 #include "net/rime/rime.h"
 
 #include "sys/node-id.h"
@@ -50,10 +48,6 @@
 #include "cfs/cfs-coffee.h"
 #include "sys/autostart.h"
 
-
-#if DCOSYNCH_CONF_ENABLED
-static struct timer mgt_timer;
-#endif
 extern int msp430_dco_required;
 
 #define UIP_OVER_MESH_CHANNEL 8
@@ -67,8 +61,10 @@ extern int msp430_dco_required;
 
 void init_platform(void);
 
-void uip_log(char *msg) { puts(msg); }
-
+// node_idが設定されていなかったらds2411から読み込むみたい
+// でもds2411は使いたくないのでここはいらない
+// ここでnodeidをrimeに設定している
+/*---------------------------------------------------------------------------*/
 static void set_rime_addr(void)
 {
   linkaddr_t addr;
@@ -94,7 +90,7 @@ static void set_rime_addr(void)
   PRINTF("%d\n", addr.u8[i]);
 }
 /*---------------------------------------------------------------------------*/
-#if !PROCESS_CONF_NO_PROCESS_NAMES
+#if DEBUG
 static void print_processes(struct process * const processes[])
 {
   /*  const struct process * const * p = processes;*/
@@ -105,24 +101,26 @@ static void print_processes(struct process * const processes[])
   }
   putchar('\n');
 }
-#endif /* !PROCESS_CONF_NO_PROCESS_NAMES */
+#endif /* DEBUG */
 /*--------------------------------------------------------------------------*/
 static void start_autostart_processes()
 {
-#if !PROCESS_CONF_NO_PROCESS_NAMES
+#if DEBUG
   print_processes(autostart_processes);
-#endif /* !PROCESS_CONF_NO_PROCESS_NAMES */
+#endif /* DEBUG */
   autostart_start(autostart_processes);
 }
 /*---------------------------------------------------------------------------*/
 static void start_network_layer()
 {
   start_autostart_processes();
-  /* To support link layer security in combination with NETSTACK_CONF_WITH_IPV4 and
+  /* To support link layer security in combination with
+     NETSTACK_CONF_WITH_IPV4 and
    * TIMESYNCH_CONF_ENABLED further things may need to be moved here */
 }
 /*---------------------------------------------------------------------------*/
-int main(int argc, char **argv)
+
+void hardware_init()
 {
   /*
    * Initalize hardware.
@@ -132,16 +130,13 @@ int main(int argc, char **argv)
   leds_init();
   leds_on(LEDS_RED);
 
-
+#if DEBUG
   uart1_init(BAUD2UBR(115200)); /* Must come before first printf */
+#endif /* DEBUG */
 
   leds_on(LEDS_GREEN);
   ds2411_init(); // 0.034 mA -> 0.016 mA
 
-  /* XXX hack: Fix it so that the 802.15.4 MAC address is compatible
-     with an Ethernet MAC address - byte 0 (byte 2 in the DS ID)
-     cannot be odd. */
-  ds2411_id[2] &= 0xfe;
 
   leds_on(LEDS_BLUE);
   xmem_init(); //0.022 mA -> 0.016 mA
@@ -153,23 +148,25 @@ int main(int argc, char **argv)
   /*
    * Hardware initialization done!
    */
+}
+
+int address_init()
+{
+  /* XXX hack: Fix it so that the 802.15.4 MAC address is compatible
+     with an Ethernet MAC address - byte 0 (byte 2 in the DS ID)
+     cannot be odd. */
+  ds2411_id[2] &= 0xfe;
 
   node_id = 1;
   node_id_restore(); //using xmem
+}
 
-
-
-  /* for setting "hardcoded" IEEE 802.15.4 MAC addresses */
-#ifdef IEEE_802154_MAC_ADDRESS
-  {
-    uint8_t ieee[] = IEEE_802154_MAC_ADDRESS;
-    memcpy(ds2411_id, ieee, sizeof(uip_lladdr.addr));
-    ds2411_id[7] = node_id & 0xff;
-  }
-#endif
-
+int main(int argc, char **argv)
+{
+  hardware_init();
+  address_init();
   random_init(ds2411_id[0] + node_id);
-  
+
   leds_off(LEDS_BLUE);
   /*
    * Initialize Contiki and our processes.
@@ -177,7 +174,6 @@ int main(int argc, char **argv)
   process_init(); //0.016 mA
 
   process_start(&etimer_process, NULL);
-
 
   ctimer_init(); //0.040 mA -> 0.017
 
@@ -199,7 +195,7 @@ int main(int argc, char **argv)
     PRINTF("MAC %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x ",
            longaddr[0], longaddr[1], longaddr[2], longaddr[3],
            longaddr[4], longaddr[5], longaddr[6], longaddr[7]);
-    
+
     cc2420_set_pan_addr(IEEE802154_PANID, shortaddr, longaddr); //0.016 mA
   }
 
@@ -220,7 +216,6 @@ int main(int argc, char **argv)
                          NETSTACK_RDC.channel_check_interval()),
          CC2420_CONF_CHANNEL);
 
-
   uart1_set_input(serial_line_input_byte);
   serial_line_init(); //0.016 mA
 
@@ -237,36 +232,34 @@ int main(int argc, char **argv)
   /*  watchdog_stop();*/
   while(1) {
     int r;
-    do {
+    do{
       /* Reset watchdog. */
       watchdog_periodic();
       r = process_run();
-    } while(r > 0);
+    }while(r > 0);
 
     /*
      * Idle processing.
      */
-    int s = splhigh();		/* Disable interrupts. */
+    int s = splhigh();        /* Disable interrupts. */
     /* uart1_active is for avoiding LPM3 when still sending or receiving */
-    if(process_nevents() != 0 || uart1_active()) {
-      splx(s);			/* Re-enable interrupts. */
-    } else {
+    if(process_nevents() != 0 || uart1_active()){
+      splx(s);            /* Re-enable interrupts. */
+    }else{
       watchdog_stop();
       /* check if the DCO needs to be on - if so - only LPM 1 */
-      if (msp430_dco_required) {
-//      if(0){
-	_BIS_SR(GIE | CPUOFF); /* LPM1 sleep for DMA to work!. */
+      if(msp430_dco_required){
+        // ここでエラーメッセージを吐くようにするという手もある
+        // uartがONになっている時だけここに来るはず
+        _BIS_SR(GIE | CPUOFF); /* LPM1 sleep for DMA to work!. */
       } else {
-	_BIS_SR(GIE | SCG0 | SCG1 | CPUOFF); /* LPM3 sleep. This
-						statement will block
-						until the CPU is
-						woken up by an
-						interrupt that sets
-						the wake up flag. */
+        /* LPM3 sleep. This statement will block until the CPU is
+           woken up by an interrupt that sets the wake up flag. */
+        _BIS_SR(GIE | SCG0 | SCG1 | CPUOFF); 
         //0.03750 mA
       }
       /* We get the current processing time for interrupts that was
-	 done during the LPM and store it for next time around.  */
+         done during the LPM and store it for next time around.  */
       dint();
       eint();
       watchdog_start();
@@ -275,11 +268,5 @@ int main(int argc, char **argv)
 
   return 0;
 }
+
 /*---------------------------------------------------------------------------*/
-#if LOG_CONF_ENABLED
-void
-log_message(char *m1, char *m2)
-{
-  printf("%s%s\n", m1, m2);
-}
-#endif /* LOG_CONF_ENABLED */
