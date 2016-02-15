@@ -44,6 +44,7 @@
 #include "net/rime/rime.h"
 
 #include "sys/node-id.h"
+#include "sys/clock.h"
 #include "cfs-coffee-arch.h"
 #include "cfs/cfs-coffee.h"
 #include "sys/autostart.h"
@@ -70,14 +71,8 @@ static void set_rime_addr(void)
 
   memset(&addr, 0, sizeof(linkaddr_t));
 
-  if(node_id == 0){
-    for(i = 0; i < sizeof(linkaddr_t); ++i) {
-      addr.u8[i] = ds2411_id[7 - i];
-    }
-  }else{
-    addr.u8[0] = node_id & 0xff;
-    addr.u8[1] = node_id >> 8;
-  }
+  addr.u8[0] = node_id & 0xff;
+  addr.u8[1] = node_id >> 8;
 
   linkaddr_set_node_addr(&addr);
   PRINTF("Rime started with address ");
@@ -114,7 +109,7 @@ static void start_network_layer()
   start_autostart_processes();
   /* To support link layer security in combination with
      NETSTACK_CONF_WITH_IPV4 and
-   * TIMESYNCH_CONF_ENABLED further things may need to be moved here */
+     * TIMESYNCH_CONF_ENABLED further things may need to be moved here */
 }
 /*---------------------------------------------------------------------------*/
 
@@ -145,15 +140,55 @@ void hardware_init()
    * Hardware initialization done!
    */
 }
+/*---------------------------------------------------------------------------*/
+void sdlab_3bit_led(uint8_t error_code)
+{
+  if(error_code & 0x04){
+    leds_on(LEDS_RED);
+  }else{
+    leds_off(LEDS_RED);
+  }
+
+  if(error_code & 0x02){
+    leds_on(LEDS_GREEN);
+  }else{
+    leds_off(LEDS_GREEN);
+  }
+
+  if(error_code & 0x01){
+    leds_on(LEDS_BLUE);
+  }else{
+    leds_off(LEDS_BLUE);
+  }
+}
+
+void sdlab_exit(uint8_t error_code)
+{
+  uint8_t i;
+  uint8_t tmp;
+
+  tmp = error_code >> 3;
+
+  while(1){
+    sdlab_3bit_led(error_code);
+    for(i = 0; i < 20; i++){
+      clock_delay(50000);
+    }
+    sdlab_3bit_led(tmp);
+    clock_delay(50000);
+    clock_delay(50000);
+    clock_delay(50000);
+    clock_delay(50000);
+  }
+}
 
 void address_init()
 {
-  /* XXX hack: Fix it so that the 802.15.4 MAC address is compatible
-     with an Ethernet MAC address - byte 0 (byte 2 in the DS ID)
-     cannot be odd. */
-  ds2411_id[2] &= 0xfe;
-//  node_id = 1;
   node_id_restore(); //using xmem
+  if(node_id == 0){
+    PRINTF("need to burn nodeid\n");
+    sdlab_exit(15);
+  }
 }
 
 void set_rf_addr()
