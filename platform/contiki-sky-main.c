@@ -49,6 +49,8 @@
 #include "cfs/cfs-coffee.h"
 #include "sys/autostart.h"
 
+#include "contiki-lpsky.h"
+
 extern int msp430_dco_required;
 
 #define DEBUG 1
@@ -141,53 +143,13 @@ void hardware_init()
    */
 }
 /*---------------------------------------------------------------------------*/
-void sdlab_3bit_led(uint8_t error_code)
-{
-  if(error_code & 0x04){
-    leds_on(LEDS_RED);
-  }else{
-    leds_off(LEDS_RED);
-  }
-
-  if(error_code & 0x02){
-    leds_on(LEDS_GREEN);
-  }else{
-    leds_off(LEDS_GREEN);
-  }
-
-  if(error_code & 0x01){
-    leds_on(LEDS_BLUE);
-  }else{
-    leds_off(LEDS_BLUE);
-  }
-}
-
-void sdlab_exit(uint8_t error_code)
-{
-  uint8_t i;
-  uint8_t tmp;
-
-  tmp = error_code >> 3;
-
-  while(1){
-    sdlab_3bit_led(error_code);
-    for(i = 0; i < 20; i++){
-      clock_delay(50000);
-    }
-    sdlab_3bit_led(tmp);
-    clock_delay(50000);
-    clock_delay(50000);
-    clock_delay(50000);
-    clock_delay(50000);
-  }
-}
 
 void address_init()
 {
   node_id_restore(); //using xmem
   if(node_id == 0){
     PRINTF("need to burn nodeid\n");
-    sdlab_exit(15);
+    lpsky_exit(LPSKY_ERROR_NODEID);
   }
 }
 
