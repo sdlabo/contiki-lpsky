@@ -14,5 +14,6 @@ void lpsky_spi_off();
 void lpsky_exit(uint8_t error_code);
 
 #define LPSKY_ERROR_NODEID 1
+#define LPSKY_ERROR_LPM1 2
 
 #endif /* CONTIKI_LPSKY_H */

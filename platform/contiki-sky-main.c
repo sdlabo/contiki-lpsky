@@ -62,9 +62,6 @@ extern int msp430_dco_required;
 
 void init_platform(void);
 
-// node_idが設定されていなかったらds2411から読み込むみたい
-// でもds2411は使いたくないのでここはいらない
-// ここでnodeidをrimeに設定している
 /*---------------------------------------------------------------------------*/
 static void set_rime_addr(void)
 {
@@ -147,10 +144,6 @@ void hardware_init()
 void address_init()
 {
   node_id_restore(); //using xmem
-  if(node_id == 0){
-    PRINTF("need to burn nodeid\n");
-    lpsky_exit(LPSKY_ERROR_NODEID);
-  }
 }
 
 void set_rf_addr()
@@ -196,6 +189,9 @@ void loop_scheduler()
       if(msp430_dco_required){
         // ここでエラーメッセージを吐くようにするという手もある
         // uartがONになっている時だけここに来るはず
+#ifdef DEBUG == 0
+//        lpsky_exit(LPSKY_ERROR_LPM1);
+#endif /* DEBUG == 0 **/
         _BIS_SR(GIE | CPUOFF); /* LPM1 sleep for DMA to work!. */
       } else {
         /* LPM3 sleep. This statement will block until the CPU is
@@ -229,6 +225,11 @@ int main(int argc, char **argv)
   set_rime_addr(); //0.016 mA
   cc2420_init(); //0.4375 mA -> 0.016 mA
   set_rf_addr();
+
+  if(node_id == 0){
+    PRINTF("need to burn nodeid\n");
+    lpsky_exit(LPSKY_ERROR_NODEID);
+  }
 
   PRINTF(CONTIKI_VERSION_STRING " started. ");
 

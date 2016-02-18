@@ -41,6 +41,7 @@
 #include "contiki-conf.h"
 #include "cc2420.h"
 #include "cc2420_const.h"
+#include "dev/leds.h"
 
 void lpsky_lpm4()
 {
@@ -167,11 +168,11 @@ void lpsky_exit(uint8_t error_code)
   tmp = error_code >> 3;
 
   while(1){
-    sdlab_3bit_led(error_code);
+    lpsky_3bit_led(error_code);
     for(i = 0; i < 20; i++){
       clock_delay(50000);
     }
-    sdlab_3bit_led(tmp);
+    lpsky_3bit_led(tmp);
     clock_delay(50000);
     clock_delay(50000);
     clock_delay(50000);
