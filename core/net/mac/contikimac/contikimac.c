@@ -68,10 +68,7 @@
 #ifndef RDC_CONF_HARDWARE_CSMA
 #define RDC_CONF_HARDWARE_CSMA       0
 #endif
-/* Radio returns TX_OK/TX_NOACK after autoack wait */
-#ifndef RDC_CONF_HARDWARE_ACK
-#define RDC_CONF_HARDWARE_ACK        0
-#endif
+
 /* MCU can sleep during radio off */
 #ifndef RDC_CONF_MCU_SLEEP
 #define RDC_CONF_MCU_SLEEP           0
@@ -135,11 +132,15 @@ static int we_are_receiving_burst = 0;
 
 /* CCA_SLEEP_TIME is the time between two successive CCA checks. */
 /* Add 1 when rtimer ticks are coarse */
+#ifdef CONTIKIMAC_CONF_CCA_SLEEP_TIME
+#define CCA_SLEEP_TIME CONTIKIMAC_CONF_CCA_SLEEP_TIME
+#else
 #if RTIMER_ARCH_SECOND > 8000
 #define CCA_SLEEP_TIME                     RTIMER_ARCH_SECOND / 2000
 #else
 #define CCA_SLEEP_TIME                     (RTIMER_ARCH_SECOND / 2000) + 1
-#endif
+#endif /* RTIMER_ARCH_SECOND > 8000 */
+#endif /* CONTIKIMAC_CONF_CCA_SLEEP_TIME */
 
 /* CHECK_TIME is the total time it takes to perform CCA_COUNT_MAX
    CCAs. */
@@ -152,7 +153,11 @@ static int we_are_receiving_burst = 0;
 /* LISTEN_TIME_AFTER_PACKET_DETECTED is the time that we keep checking
    for activity after a potential packet has been detected by a CCA
    check. */
+#ifdef CONTIKIMAC_CONF_LISTEN_TIME_AFTER_PACKET_DETECTED
+#define LISTEN_TIME_AFTER_PACKET_DETECTED  CONTIKIMAC_CONF_LISTEN_TIME_AFTER_PACKET_DETECTED
+#else
 #define LISTEN_TIME_AFTER_PACKET_DETECTED  RTIMER_ARCH_SECOND / 80
+#endif
 
 /* MAX_SILENCE_PERIODS is the maximum amount of periods (a period is
    CCA_CHECK_TIME + CCA_SLEEP_TIME) that we allow to be silent before
@@ -194,6 +199,12 @@ static int we_are_receiving_burst = 0;
    to a neighbor for which we have a phase lock. */
 #define MAX_PHASE_STROBE_TIME              RTIMER_ARCH_SECOND / 60
 
+#ifdef CONTIKIMAC_CONF_SEND_SW_ACK
+#define CONTIKIMAC_SEND_SW_ACK CONTIKIMAC_CONF_SEND_SW_ACK
+#else
+#define CONTIKIMAC_SEND_SW_ACK 0
+#endif
+
 #define ACK_LEN 3
 
 #include <stdio.h>
@@ -215,6 +226,7 @@ static volatile unsigned char radio_is_on = 0;
 #define PRINTF(...)
 #define PRINTDEBUG(...)
 #endif
+
 
 #if WITH_PHASE_OPTIMIZATION
 
@@ -292,6 +304,7 @@ schedule_powercycle_fixed(struct rtimer *t, rtimer_clock_t fixed_time)
 static void
 powercycle_turn_radio_off(void)
 {
+  
   if(we_are_sending == 0 && we_are_receiving_burst == 0) {
     off();
   }
@@ -511,9 +524,21 @@ send_packet(mac_callback_t mac_callback, void *mac_callback_ptr,
       return MAC_TX_COLLISION;
     }
   } else {
+#if NETSTACK_CONF_WITH_IPV6
+    PRINTDEBUG("contikimac: send unicast to %02x%02x:%02x%02x:%02x%02x:%02x%02x\n",
+               packetbuf_addr(PACKETBUF_ADDR_RECEIVER)->u8[0],
+               packetbuf_addr(PACKETBUF_ADDR_RECEIVER)->u8[1],
+               packetbuf_addr(PACKETBUF_ADDR_RECEIVER)->u8[2],
+               packetbuf_addr(PACKETBUF_ADDR_RECEIVER)->u8[3],
+               packetbuf_addr(PACKETBUF_ADDR_RECEIVER)->u8[4],
+               packetbuf_addr(PACKETBUF_ADDR_RECEIVER)->u8[5],
+               packetbuf_addr(PACKETBUF_ADDR_RECEIVER)->u8[6],
+               packetbuf_addr(PACKETBUF_ADDR_RECEIVER)->u8[7]);
+#else /* NETSTACK_CONF_WITH_IPV6 */
     PRINTDEBUG("contikimac: send unicast to %u.%u\n",
                packetbuf_addr(PACKETBUF_ADDR_RECEIVER)->u8[0],
                packetbuf_addr(PACKETBUF_ADDR_RECEIVER)->u8[1]);
+#endif /* NETSTACK_CONF_WITH_IPV6 */
   }
 
   if(!packetbuf_attr(PACKETBUF_ATTR_IS_CREATED_AND_SECURED)) {
@@ -608,14 +633,12 @@ send_packet(mac_callback_t mac_callback, void *mac_callback_ptr,
   }
 #endif /* RDC_CONF_HARDWARE_CSMA */
 
-#if !RDC_CONF_HARDWARE_ACK
   if(!is_broadcast) {
     /* Turn radio on to receive expected unicast ack.  Not necessary
        with hardware ack detection, and may trigger an unnecessary cca
        or rx cycle */
      on();
   }
-#endif
 
   watchdog_periodic();
   t0 = RTIMER_NOW();
@@ -639,31 +662,9 @@ send_packet(mac_callback_t mac_callback, void *mac_callback_ptr,
 #if WITH_PHASE_OPTIMIZATION
       rtimer_clock_t txtime = RTIMER_NOW();
 #endif
-#if RDC_CONF_HARDWARE_ACK
-      int ret = NETSTACK_RADIO.transmit(transmit_len);
-#else
-      NETSTACK_RADIO.transmit(transmit_len);
-#endif
 
-#if RDC_CONF_HARDWARE_ACK
-     /* For radios that block in the transmit routine and detect the
-	ACK in hardware */
-      if(ret == RADIO_TX_OK) {
-        if(!is_broadcast) {
-          got_strobe_ack = 1;
-#if WITH_PHASE_OPTIMIZATION
-          encounter_time = txtime;
-#endif
-          break;
-        }
-      } else if (ret == RADIO_TX_NOACK) {
-      } else if (ret == RADIO_TX_COLLISION) {
-          PRINTF("contikimac: collisions while sending\n");
-          collisions++;
-      }
-      wt = RTIMER_NOW();
-      while(RTIMER_CLOCK_LT(RTIMER_NOW(), wt + INTER_PACKET_INTERVAL)) { }
-#else /* RDC_CONF_HARDWARE_ACK */
+      NETSTACK_RADIO.transmit(transmit_len);
+
      /* Wait for the ACK packet */
       wt = RTIMER_NOW();
       while(RTIMER_CLOCK_LT(RTIMER_NOW(), wt + INTER_PACKET_INTERVAL)) { }
@@ -687,7 +688,6 @@ send_packet(mac_callback_t mac_callback, void *mac_callback_ptr,
           collisions++;
         }
       }
-#endif /* RDC_CONF_HARDWARE_ACK */
     }
   }
 
@@ -824,8 +824,16 @@ static void
 input_packet(void)
 {
   static struct ctimer ct;
+  int duplicate = 0;
+
   if(!we_are_receiving_burst) {
     off();
+  }
+
+  if(packetbuf_datalen() == ACK_LEN) {
+    /* Ignore ack packets */
+    PRINTF("ContikiMAC: ignored ack\n");
+    return;
   }
 
   /*  printf("cycle_start 0x%02x 0x%02x\n", cycle_start, cycle_start % CYCLE_TIME);*/
@@ -855,16 +863,21 @@ input_packet(void)
 
 #if RDC_WITH_DUPLICATE_DETECTION
       /* Check for duplicate packet. */
-      if(mac_sequence_is_duplicate()) {
+      duplicate = mac_sequence_is_duplicate();
+      if(duplicate) {
         /* Drop the packet. */
-        /*        printf("Drop duplicate ContikiMAC layer packet\n");*/
-        return;
+        PRINTF("contikimac: Drop duplicate\n");
+      } else {
+        mac_sequence_register_seqno();
       }
-      mac_sequence_register_seqno();
 #endif /* RDC_WITH_DUPLICATE_DETECTION */
 
       PRINTDEBUG("contikimac: data (%u)\n", packetbuf_datalen());
-      NETSTACK_MAC.input();
+
+
+      if(!duplicate) {
+        NETSTACK_MAC.input();
+      }
       return;
     } else {
       PRINTDEBUG("contikimac: data not for us\n");

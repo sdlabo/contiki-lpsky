@@ -83,7 +83,7 @@ enum write_ram_order {
   WRITE_RAM_REVERSE
 };
 
-#define DEBUG 0
+#define DEBUG 1
 #if DEBUG
 #include <stdio.h>
 #define PRINTF(...) printf(__VA_ARGS__)
@@ -575,8 +575,10 @@ cc2420_init(void)
   reg = getreg(CC2420_MDMCTRL0);
 
 #if CC2420_CONF_AUTOACK
+  PRINTF("saru: autoack enabled\n");
   reg |= AUTOACK | ADR_DECODE;
 #else
+  PRINTF("saru: autoack denabled\n");
   reg &= ~(AUTOACK | ADR_DECODE);
 #endif /* CC2420_CONF_AUTOACK */
   

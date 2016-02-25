@@ -43,7 +43,7 @@
 #include "lib/random.h"
 #include <string.h>
 
-#define DEBUG 0
+#define DEBUG 1
 
 #if DEBUG
 #include <stdio.h>
@@ -105,8 +105,10 @@ create_frame(int type, int do_create)
   params.fcf.frame_type = packetbuf_attr(PACKETBUF_ATTR_FRAME_TYPE);
   params.fcf.frame_pending = packetbuf_attr(PACKETBUF_ATTR_PENDING);
   if(packetbuf_holds_broadcast()) {
+    PRINTF("saru: required = 0\n");
     params.fcf.ack_required = 0;
   } else {
+    PRINTF("saru: required = 1\n");
     params.fcf.ack_required = packetbuf_attr(PACKETBUF_ATTR_MAC_ACK);
   }
   params.fcf.panid_compression = 0;
