@@ -64,10 +64,6 @@
 #ifndef WITH_FAST_SLEEP
 #define WITH_FAST_SLEEP              1
 #endif
-/* Radio does CSMA and autobackoff */
-#ifndef RDC_CONF_HARDWARE_CSMA
-#define RDC_CONF_HARDWARE_CSMA       0
-#endif
 
 /* MCU can sleep during radio off */
 #ifndef RDC_CONF_MCU_SLEEP
@@ -393,7 +389,7 @@ powercycle(struct rtimer *t, void *ptr)
              received (as indicated by the
              NETSTACK_RADIO.pending_packet() function), we stop
              snooping. */
-#if !RDC_CONF_HARDWARE_CSMA
+
        /* A cca cycle will disrupt rx on some radios, e.g. mc1322x, rf230 */
        /*TODO: Modify those drivers to just return the internal RSSI when already in rx mode */
         if(NETSTACK_RADIO.channel_clear()) {
@@ -401,7 +397,6 @@ powercycle(struct rtimer *t, void *ptr)
         } else {
           silence_periods = 0;
         }
-#endif
 
         ++periods;
 
@@ -438,9 +433,9 @@ powercycle(struct rtimer *t, void *ptr)
 
     if(RTIMER_CLOCK_LT(RTIMER_NOW() - cycle_start, CYCLE_TIME - CHECK_TIME * 4)) {
       /* Schedule the next powercycle interrupt, or sleep the mcu
-	 until then.  Sleeping will not exit from this interrupt, so
-	 ensure an occasional wake cycle or foreground processing will
-	 be blocked until a packet is detected */
+     until then.  Sleeping will not exit from this interrupt, so
+     ensure an occasional wake cycle or foreground processing will
+     be blocked until a packet is detected */
 #if RDC_CONF_MCU_SLEEP
       static uint8_t sleepcycle;
       if((sleepcycle++ < 16) && !we_are_sending && !radio_is_on) {
@@ -483,7 +478,7 @@ broadcast_rate_drop(void)
 /*---------------------------------------------------------------------------*/
 static int
 send_packet(mac_callback_t mac_callback, void *mac_callback_ptr,
-	    struct rdc_buf_list *buf_list,
+        struct rdc_buf_list *buf_list,
             int is_receiver_awake)
 {
   rtimer_clock_t t0;
@@ -602,7 +597,6 @@ send_packet(mac_callback_t mac_callback, void *mac_callback_ptr,
   contikimac_was_on = contikimac_is_on;
   contikimac_is_on = 1;
 
-#if !RDC_CONF_HARDWARE_CSMA
     /* Check if there are any transmissions by others. */
     /* TODO: why does this give collisions before sending with the mc1322x? */
   if(is_receiver_awake == 0) {
@@ -631,7 +625,6 @@ send_packet(mac_callback_t mac_callback, void *mac_callback_ptr,
     contikimac_is_on = contikimac_was_on;
     return MAC_TX_COLLISION;
   }
-#endif /* RDC_CONF_HARDWARE_CSMA */
 
   if(!is_broadcast) {
     /* Turn radio on to receive expected unicast ack.  Not necessary
@@ -715,14 +708,14 @@ send_packet(mac_callback_t mac_callback, void *mac_callback_ptr,
 #if WITH_PHASE_OPTIMIZATION
   if(is_known_receiver && got_strobe_ack) {
     PRINTF("no miss %d wake-ups %d\n",
-	   packetbuf_addr(PACKETBUF_ADDR_RECEIVER)->u8[0],
+       packetbuf_addr(PACKETBUF_ADDR_RECEIVER)->u8[0],
            strobes);
   }
 
   if(!is_broadcast) {
     if(collisions == 0 && is_receiver_awake == 0) {
       phase_update(packetbuf_addr(PACKETBUF_ADDR_RECEIVER),
-		   encounter_time, ret);
+           encounter_time, ret);
     }
   }
 #endif /* WITH_PHASE_OPTIMIZATION */
@@ -854,7 +847,7 @@ input_packet(void)
       if(we_are_receiving_burst) {
         on();
         /* Set a timer to turn the radio off in case we do not receive
-	   a next packet */
+           a next packet */
         ctimer_set(&ct, INTER_PACKET_DEADLINE, recv_burst_off, NULL);
       } else {
         off();
