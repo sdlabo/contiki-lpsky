@@ -193,8 +193,9 @@ clean:
 	-rm -f *~ *core core *.srec \
 	*.lst *.map \
 	*.cprg *.bin *.data contiki*.a *.firmware core-labels.S *.ihex *.ini \
-	*.ce *.co
+	*.ce *.co *.sky
 	rm -rf $(CLEAN)
+	rm symbols.[hc]
 	-rm -rf $(OBJECTDIR)
 
 distclean: clean

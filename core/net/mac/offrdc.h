@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007, Swedish Institute of Computer Science.
+ * Copyright (c) 2010, Swedish Institute of Computer Science.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -32,20 +32,17 @@
 
 /**
  * \file
- *         A MAC stack protocol that performs retransmissions when the
- *         underlying MAC layer has problems with collisions
+ *         A null RDC implementation that uses framer for headers.
  * \author
  *         Adam Dunkels <adam@sics.se>
+ *         Niclas Finne <nfi@sics.se>
  */
 
-#ifndef CSMA_H_
-#define CSMA_H_
+#ifndef OFFRDC_H_
+#define OFFRDC_H_
 
-#include "net/mac/mac.h"
-#include "dev/radio.h"
+#include "net/mac/rdc.h"
 
-extern const struct mac_driver csma;
+extern const struct rdc_driver offrdc;
 
-const struct mac_driver *csma_init(const struct mac_driver *r);
-
-#endif /* CSMA_H_ */
+#endif /* OFFRDC_H_ */

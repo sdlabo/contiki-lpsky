@@ -447,7 +447,7 @@ init(void)
   memb_init(&neighbor_memb);
 }
 /*---------------------------------------------------------------------------*/
-const struct mac_driver csma_driver = {
+const struct mac_driver csma = {
   "CSMA",
   init,
   send_packet,

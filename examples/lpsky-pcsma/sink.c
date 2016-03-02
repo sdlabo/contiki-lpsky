@@ -3,8 +3,8 @@
 #include "dev/leds.h"
 #include "rime.h"
 
-PROCESS(test03_process, "test03 process");
-AUTOSTART_PROCESSES(&test03_process);
+PROCESS(recv_process, "recv process");
+AUTOSTART_PROCESSES(&recv_process);
 
 static void unicast_recv(struct unicast_conn *c, const linkaddr_t *from)
 {
@@ -16,7 +16,7 @@ static void unicast_recv(struct unicast_conn *c, const linkaddr_t *from)
 static struct unicast_conn uc;
 static const struct unicast_callbacks unicast_call = {unicast_recv};
 
-PROCESS_THREAD(test03_process, ev, data)
+PROCESS_THREAD(recv_process, ev, data)
 {
   static struct etimer et;
 

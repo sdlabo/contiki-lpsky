@@ -46,7 +46,10 @@
 #include "net/rime/rimestats.h"
 #include "net/netstack.h"
 
-#define WITH_SEND_CCA 1
+#ifndef WITH_CC2420_CCA
+#error Needed to be set WITH_CC2420CCA
+#endif
+//#define WITH_SEND_CCA 1
 
 #ifndef CC2420_CONF_CHANNEL
 #define CC2420_CONF_CHANNEL 26
@@ -592,13 +595,15 @@ static int cc2420_transmit(unsigned short payload_len)
 #define LOOP_20_SYMBOLS CC2420_CONF_SYMBOL_LOOP_COUNT
 #endif
 
-#if WITH_SEND_CCA
+#if WITH_CC2420_CCA
+  PRINTF("cc2420: saru: STXONCCA\n");
   strobe(CC2420_SRXON);
   wait_for_status(BV(CC2420_RSSI_VALID));
   strobe(CC2420_STXONCCA);
-#else /* WITH_SEND_CCA */
+#else /* WITH_CC2420_CCA */
+  PRINTF("cc2420: saru: STXON\n");
   strobe(CC2420_STXON);
-#endif /* WITH_SEND_CCA */
+#endif /* WITH_CC2420_CCA */
   for(i = LOOP_20_SYMBOLS; i > 0; i--) {
     if(CC2420_SFD_IS_1) {
       {
@@ -618,6 +623,7 @@ static int cc2420_transmit(unsigned short payload_len)
            we just started receiving a packet, so we drop the
            transmission. */
         RELEASE_LOCK();
+        PRINTF("cc2420: saru: returning RADIO_TX_COLLISINO\n");
         return RADIO_TX_COLLISION;
       }
       /* We wait until transmission has ended so that we get an

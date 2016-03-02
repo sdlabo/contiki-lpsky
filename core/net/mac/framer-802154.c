@@ -110,6 +110,7 @@ create_frame(int type, int do_create)
   } else {
     PRINTF("saru: required = 1\n");
     params.fcf.ack_required = packetbuf_attr(PACKETBUF_ATTR_MAC_ACK);
+    PRINTF("saru: fcf.ack_required = %d\n", params.fcf.ack_required);
   }
   params.fcf.panid_compression = 0;
 

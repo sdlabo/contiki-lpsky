@@ -32,18 +32,18 @@
 
 /**
  * \file
- *         A null RDC implementation that uses framer for headers.
+ *         A off RDC implementation that uses framer for headers.
  * \author
- *         Adam Dunkels <adam@sics.se>
- *         Niclas Finne <nfi@sics.se>
+ *         Shunsuke Saruwatari <saru@inf.shizuoka.ac.jp>
  */
 
 #include "net/mac/mac-sequence.h"
-#include "net/mac/nullrdc.h"
+#include "net/mac/offrdc.h"
 #include "net/packetbuf.h"
 #include "net/queuebuf.h"
 #include "net/netstack.h"
 #include "net/rime/rimestats.h"
+#include "sys/node-id.h"
 #include <string.h>
 
 #define DEBUG 1
@@ -66,6 +66,10 @@
 #define ACK_WAIT_TIME                      RTIMER_SECOND / 2500
 #define AFTER_ACK_DETECTED_WAIT_TIME       RTIMER_SECOND / 1500
 
+#ifndef OFFRDC_ACK
+#error Needed to set OFFRDC_ACK
+#endif
+
 #define ACK_LEN 3
 
 /*---------------------------------------------------------------------------*/
@@ -75,7 +79,7 @@ static int send_one_packet(mac_callback_t sent, void *ptr)
   int last_sent_ok = 0;
 
   packetbuf_set_addr(PACKETBUF_ADDR_SENDER, &linkaddr_node_addr);
-  packetbuf_set_attr(PACKETBUF_ATTR_MAC_ACK, 1);
+  packetbuf_set_attr(PACKETBUF_ATTR_MAC_ACK, OFFRDC_ACK);
 
   if(NETSTACK_FRAMER.create_and_secure() < 0){
     /* Failed to allocate space for headers */
@@ -102,6 +106,9 @@ static int send_one_packet(mac_callback_t sent, void *ptr)
         RIMESTATS_ADD(reliabletx);
       }
 
+#if OFFRDC_ACK
+      NETSTACK_RADIO.on();
+#endif
       switch(NETSTACK_RADIO.transmit(packetbuf_totlen())){
       case RADIO_TX_OK:
         if(is_broadcast) {
@@ -109,6 +116,7 @@ static int send_one_packet(mac_callback_t sent, void *ptr)
         }else{
           rtimer_clock_t wt;
 
+          PRINTF("offrdc: saru: waiting for ACK\n");
           /* Check for ack */
           wt = RTIMER_NOW();
           watchdog_periodic();
@@ -156,7 +164,13 @@ static int send_one_packet(mac_callback_t sent, void *ptr)
   if(ret == MAC_TX_OK) {
     last_sent_ok = 1;
   }
+
+  if(node_id != 1){
+    NETSTACK_RADIO.off();
+  }
+
   mac_call_sent_callback(sent, ptr, ret, 1);
+
   return last_sent_ok;
 }
 /*---------------------------------------------------------------------------*/
@@ -242,11 +256,15 @@ static unsigned short channel_check_interval(void)
 /*---------------------------------------------------------------------------*/
 static void init(void)
 {
-  on();
+  if(node_id != 1){
+    NETSTACK_RADIO.off();
+  }else{
+    on();
+  }
 }
 /*---------------------------------------------------------------------------*/
-const struct rdc_driver nullrdc = {
-  "nullrdc",
+const struct rdc_driver offrdc = {
+  "offrdc",
   init,
   send_packet,
   send_list,
